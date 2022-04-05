@@ -18,3 +18,6 @@ export function deepClone(obj) {
   }
 }
 
+export const judgeValidity = (val) => {
+  return val === undefined || val === null || val === "";
+};

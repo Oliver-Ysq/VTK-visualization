@@ -8,7 +8,7 @@ import vtkPolyDataReader from "vtk.js/Sources/IO/Legacy/PolyDataReader";
 import vtkPointPicker from "vtk.js/Sources/Rendering/Core/PointPicker";
 import vtkSphereSource from "vtk.js/Sources/Filters/Sources/SphereSource";
 import { get } from "../../http/api";
-import { deepClone } from "../../utils/index";
+import { deepClone, judgeValidity } from "../../utils/index";
 import { Graph } from "../../utils/graph";
 /**
  * @vtk文件对应关系
@@ -45,15 +45,30 @@ function Home() {
   const linesCopyRef = useRef([]); // 备份线结构list
   const sonNodeMap = useRef({}); // 每个节点对应的子节点集合
   const graphRef = useRef(); // 图结构
-  const lowRef = useRef(-Infinity);
-  const highRef = useRef(Infinity);
+  const lowRef = useRef(null);
+  const highRef = useRef(null);
 
   const judgeBoundary = useCallback(
     (a) => {
-      return (
-        heightListRef.current[a] < highRef.current.value &&
-        heightListRef.current[a] > lowRef.current.value
-      );
+      if (judgeValidity(highRef.current.value)) {
+        // high无效
+        if (judgeValidity(lowRef.current.value)) {
+          // high无效、low无效
+          return true;
+        } else {
+          // high无效、low有效
+          return heightListRef.current[a] > lowRef.current.value;
+        }
+      } else if (judgeValidity(lowRef.current.value)) {
+        // high有效 low无效
+        return heightListRef.current[a] < highRef.current.value;
+      } else {
+        // high有效 low有效
+        return (
+          heightListRef.current[a] < highRef.current.value &&
+          heightListRef.current[a] > lowRef.current.value
+        );
+      }
     },
     [heightListRef]
   );
@@ -276,6 +291,8 @@ function Home() {
   }, [vtkContainerRef, collapseLines]);
 
   const onReset = (e) => {
+    lowRef.current.value = null;
+    highRef.current.value = null;
     closeList.current = [];
     const {
       polydata,
@@ -385,8 +402,8 @@ function Home() {
         <tbody>
           <tr>
             <td>
-              <input type="number" ref={lowRef} />
-              <input type="number" ref={highRef} />
+              <input type="number" step={0.1} ref={lowRef} />
+              <input type="number" step={0.1} ref={highRef} />
               <button onClick={onSearchClick}>search</button>
               <button onClick={onReset} style={{ marginLeft: 12 }}>
                 Reset
