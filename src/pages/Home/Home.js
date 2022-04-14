@@ -14,7 +14,10 @@ import { Graph } from "../../utils/graph";
  * @vtk文件对应关系
  * POINT_ID 从0开始，对应POINT_DATA 的第一个点
  */
-
+const colorMap = {
+  0: [1, 1, 0], // 普通颜色
+  1: [1, 0, 0], // 选中"点"的颜色
+};
 const generateGraph = (linesList, heightList) => {
   let pointsNumber = heightList.length;
   let edgesNumber = linesList.length;
@@ -45,34 +48,45 @@ function Home() {
   const linesCopyRef = useRef([]); // 备份线结构list
   const sonNodeMap = useRef({}); // 每个节点对应的子节点集合
   const graphRef = useRef(); // 图结构
-  const lowRef = useRef(null);
-  const highRef = useRef(null);
+  const pointsColorMap = useRef([]); // 点集颜色
+  const lowRef = useRef(null); // 最小值
+  const highRef = useRef(null); // 最大值
 
+  // const judgeBoundary = useCallback(
+  //   (a) => {
+  //     if (judgeValidity(highRef.current.value)) {
+  //       // high无效
+  //       if (judgeValidity(lowRef.current.value)) {
+  //         // high无效、low无效
+  //         return true;
+  //       } else {
+  //         // high无效、low有效
+  //         return heightListRef.current[a] > lowRef.current.value;
+  //       }
+  //     } else if (judgeValidity(lowRef.current.value)) {
+  //       // high有效 low无效
+  //       return heightListRef.current[a] < highRef.current.value;
+  //     } else {
+  //       // high有效 low有效
+  //       return (
+  //         heightListRef.current[a] < highRef.current.value &&
+  //         heightListRef.current[a] > lowRef.current.value
+  //       );
+  //     }
+  //   },
+  //   [heightListRef]
+  // );
   const judgeBoundary = useCallback(
     (a) => {
       if (judgeValidity(highRef.current.value)) {
         // high无效
-        if (judgeValidity(lowRef.current.value)) {
-          // high无效、low无效
-          return true;
-        } else {
-          // high无效、low有效
-          return heightListRef.current[a] > lowRef.current.value;
-        }
-      } else if (judgeValidity(lowRef.current.value)) {
-        // high有效 low无效
-        return heightListRef.current[a] < highRef.current.value;
+        return true;
       } else {
-        // high有效 low有效
-        return (
-          heightListRef.current[a] < highRef.current.value &&
-          heightListRef.current[a] > lowRef.current.value
-        );
+        return heightListRef.current[a] < highRef.current.value;
       }
     },
     [heightListRef]
   );
-
   /**
    * click节点 展开/收起子树
    */
@@ -87,9 +101,13 @@ function Home() {
         picker,
         pointsActors,
       } = context.current;
+
       if (closeList.current.indexOf(id) >= 0) {
+        /**
+         * 展开子树
+         */
         closeList.current = closeList.current.filter((i) => i !== id);
-        console.log("[展开子树]:", closeList.current);
+        // console.log("[展开子树]:", closeList.current);
         const tree = graphRef.current.bfs(id);
         tree.forEach((i) => {
           if (judgeBoundary(i[0]) && judgeBoundary(i[1]))
@@ -104,14 +122,19 @@ function Home() {
             sphereMapper.setInputData(sphere.getOutputData());
             pointsActors[i] = vtkActor.newInstance();
             pointsActors[i].setMapper(sphereMapper);
-            pointsActors[i].getProperty().setColor(1.0, 1.0, 0.0);
+            pointsActors[i]
+              .getProperty()
+              .setColor(...colorMap[pointsColorMap.current[i]]);
             renderer.addActor(pointsActors[i]);
           }
         });
         polydata.getLines().setData(linesRef.current);
       } else {
+        /**
+         * 隐藏子树
+         **/
         closeList.current.push(id);
-        console.log("[隐藏子树]:", closeList.current);
+        // console.log("[隐藏子树]:", closeList.current);
         // 寻找id节点的子树
         const tree = graphRef.current.bfs(id);
         linesRef.current = linesRef.current.reduce((acc, v, index, arr) => {
@@ -136,15 +159,26 @@ function Home() {
               // 数组中未存 & 不是父节点
               acc.push(v[0]);
             }
-            if (acc.indexOf(v[1] < 0) && v[1] !== id) {
+            if (acc.indexOf(v[1]) < 0 && v[1] !== id) {
               // 数组中未存 & 不是父节点
               acc.push(v[1]);
             }
             return acc;
           }, []);
         }
+        console.log("sonNodeMap", id, sonNodeMap.current[id]);
         // 删除id的子节点显示
         sonNodeMap.current[id].forEach((v) => {
+          // if (
+          //   !graphRef.current.arc[v].some(
+          //     (item, idx) =>
+          //       sonNodeMap.current[id].indexOf(idx) < 0 && item === 1 // 如果该节点不与sonNodeMap之外的节点有相连
+          //   )
+          // ) {
+          //   renderer.removeActor(pointsActors[v]);
+          //   pointsActors[v].delete();
+          // }
+          renderer.removeActor(pointsActors[v]);
           pointsActors[v].delete();
         });
         polydata.getLines().setData(linesRef.current);
@@ -184,7 +218,7 @@ function Home() {
       const reader = vtkPolyDataReader.newInstance();
 
       (async function () {
-        await reader.setUrl(`http://127.0.0.1:7001/public/vtk/contour.vtk`);
+        await reader.setUrl(`http://127.0.0.1:7001/public/vtk/st.vtk`);
         polydata = reader.getOutputData(0);
         global.polydata = polydata;
 
@@ -222,7 +256,8 @@ function Home() {
           sphereMapper.setInputData(sphere.getOutputData());
           pointsActors[i] = vtkActor.newInstance();
           pointsActors[i].setMapper(sphereMapper);
-          pointsActors[i].getProperty().setColor(1.0, 1.0, 0.0);
+          pointsColorMap.current[i] = 0; // 第i个点的颜色类型
+          pointsActors[i].getProperty().setColor(...colorMap[0]);
           renderer.addActor(pointsActors[i]);
         }
         resetCamera();
@@ -258,11 +293,24 @@ function Home() {
             collapseLines(pickedPointId);
             // 根据id定位该顶点
             const pickedPoint = polydata.getPoints().getPoint(pickedPointId);
-            console.log("coordinate:", pickedPoint);
+            // console.log("coordinate:", pickedPoint);
+            console.log("高度：", heightListRef.current[pickedPointId]);
           }
           renderWindow.render();
         });
 
+        global.highlight = (id) => {
+          const sphere = vtkSphereSource.newInstance();
+          sphere.setCenter(...polydata.getPoints().getPoint(id));
+          sphere.setRadius(0.3);
+          const sphereMapper = vtkMapper.newInstance();
+          sphereMapper.setInputData(sphere.getOutputData());
+          pointsActors[id] = vtkActor.newInstance();
+          pointsActors[id].setMapper(sphereMapper);
+          pointsActors[id].getProperty().setColor(1, 1, 1);
+          renderer.addActor(pointsActors[id]);
+          renderWindow.render();
+        };
         context.current = {
           fullScreenRenderer,
           renderWindow,
@@ -312,9 +360,11 @@ function Home() {
       sphereMapper.setInputData(sphere.getOutputData());
       pointsActors[i] = vtkActor.newInstance();
       pointsActors[i].setMapper(sphereMapper);
-      pointsActors[i].getProperty().setColor(1.0, 1.0, 0.0);
+      pointsColorMap.current[i] = 0;
+      pointsActors[i].getProperty().setColor(...colorMap[0]);
       renderer.addActor(pointsActors[i]);
     }
+    linesRef.current = deepClone(linesCopyRef.current);
 
     actor.delete();
     mapper.delete();
@@ -340,11 +390,16 @@ function Home() {
       pointsActors,
     } = context.current;
     closeList.current = [];
-    const tempPointsList = heightListRef.current.reduce((acc, v, index) => {
+    const targetPointsList = heightListRef.current.reduce((acc, v, index) => {
       if (v > lowRef.current.value && v < highRef.current.value)
         acc.push(index);
       return acc;
     }, []);
+    const tempPointsList = heightListRef.current.reduce((acc, v, index) => {
+      if (v < highRef.current.value) acc.push(index);
+      return acc;
+    }, []);
+
     linesRef.current = linesCopyRef.current.reduce((acc, v, index, arr) => {
       if (index % 3 === 0) {
         if (
@@ -359,6 +414,7 @@ function Home() {
     polydata.getLines().setData(linesRef.current);
 
     for (let i = 0; i < polydata.getNumberOfPoints(); i++) {
+      renderer.removeActor(pointsActors[i]);
       pointsActors[i].delete();
       if (tempPointsList.includes(i)) {
         const sphere = vtkSphereSource.newInstance();
@@ -368,11 +424,19 @@ function Home() {
         sphereMapper.setInputData(sphere.getOutputData());
         pointsActors[i] = vtkActor.newInstance();
         pointsActors[i].setMapper(sphereMapper);
-        pointsActors[i].getProperty().setColor(1.0, 1.0, 0.0);
+        if (targetPointsList.includes(i)) {
+          // 范围内的点是蓝色
+          pointsColorMap.current[i] = 1;
+          pointsActors[i].getProperty().setColor(...colorMap[1]);
+        } else {
+          // 范围外（根路径）是黄色
+          pointsColorMap.current[i] = 0;
+          pointsActors[i].getProperty().setColor(...colorMap[0]);
+        }
         renderer.addActor(pointsActors[i]);
       }
     }
-
+    console.log(renderer);
     actor.delete();
     mapper.delete();
 
@@ -405,7 +469,11 @@ function Home() {
               <input type="number" step={0.1} ref={lowRef} />
               <input type="number" step={0.1} ref={highRef} />
               <button onClick={onSearchClick}>search</button>
-              <button onClick={onReset} style={{ marginLeft: 12 }}>
+              <button
+                // onClick={() => window.location.reload()}
+                onClick={onReset}
+                style={{ marginLeft: 12 }}
+              >
                 Reset
               </button>
             </td>
