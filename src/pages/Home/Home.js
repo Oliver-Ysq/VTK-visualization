@@ -59,7 +59,7 @@ function Home() {
    */
   const judgeValidity = useCallback(
     (id) => displayPointsRef.current.includes(id),
-    [displayPointsRef]
+    [displayPointsRef.current]
   );
   /**
    * click节点 展开/收起子树
@@ -139,7 +139,6 @@ function Home() {
             return acc;
           }, []);
         }
-        console.log("sonNodeMap", id, sonNodeMap.current[id]);
         // 删除id的子节点显示
         sonNodeMap.current[id].forEach((v) => {
           renderer.removeActor(pointsActors[v]);
@@ -309,6 +308,7 @@ function Home() {
     lowRef.current.value = null;
     highRef.current.value = null;
     closeList.current = [];
+    sonNodeMap.current = [];
     const {
       polydata,
       actor,
@@ -321,6 +321,8 @@ function Home() {
     polydata.getLines().setData(linesCopyRef.current);
     displayPointsRef.current = heightListRef.current.map((v, i) => i);
     for (let i = 0; i < polydata.getNumberOfPoints(); i++) {
+      renderer.removeActor(pointsActors[i]);
+      pointsActors[i].delete();
       const sphere = vtkSphereSource.newInstance();
       sphere.setCenter(...polydata.getPoints().getPoint(i));
       sphere.setRadius(0.15);
@@ -408,7 +410,6 @@ function Home() {
         renderer.addActor(pointsActors[i]);
       }
     }
-    console.log(renderer);
     actor.delete();
     mapper.delete();
 
@@ -441,10 +442,7 @@ function Home() {
               <input type="number" step={0.1} ref={lowRef} />
               <input type="number" step={0.1} ref={highRef} />
               <button onClick={onSearchClick}>search</button>
-              <button
-                onClick={onReset}
-                style={{ marginLeft: 12 }}
-              >
+              <button onClick={onReset} style={{ marginLeft: 12 }}>
                 Reset
               </button>
             </td>
