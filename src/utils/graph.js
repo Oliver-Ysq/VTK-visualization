@@ -10,10 +10,12 @@ export class Graph {
   EDGES_NUMBER = 0; // 边数
 
   visited = [];
+  rootId = -1;  // 根节点的id
 
   constructor(points, arc, pointsNumber, edgesNumber) {
     this.POINTS_NUMBER = pointsNumber;
     this.EDGES_NUMBER = edgesNumber;
+    this.rootId = this.POINTS_NUMBER - 1;
     for (let i = 0; i < this.POINTS_NUMBER; i++) {
       this.points[i] = {
         id: i,
@@ -66,6 +68,30 @@ export class Graph {
     return path;
   }
 
+  /**
+   * 获取pointsList中所有节点的根路径并合并去重
+   * @param {*} pointsList 
+   * @returns 
+   */
+  getCommonRootPath(pointsList) {
+    // 对于每个节点val，寻找其根路径，并合并
+    return pointsList.reduce((acc, i) => {
+      const path = this.getRootPath(this.rootId, i); // 获取当前节点的根路径
+      path.forEach((val) => {
+        if (!acc.includes(val)) {
+          // 如果最终结果中不存在当前节点，则加入
+          acc.push(val);
+        }
+      });
+      return acc;
+    }, []);
+  }
+
+  /**
+   * 根据id单向遍历整个图结构
+   * @param {*} id 
+   * @returns 
+   */
   bfs(id) {
     let queue = []; //初始化队列
     const res = [];
@@ -92,7 +118,7 @@ export class Graph {
           if (
             this.points[j].val < this.points[i].val ||
             (this.points[j].val === this.points[i].val &&
-              !this.getRootPath(this.POINTS_NUMBER - 1, i).includes(j)) // j节点不能在i节点的根路径上
+              !this.getRootPath(this.rootId, i).includes(j)) // j节点不能在i节点的根路径上
           ) {
             res.push([i, j]);
             queue.push(j); //将此顶点放入队列

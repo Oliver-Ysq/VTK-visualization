@@ -8,7 +8,7 @@ import vtkPolyDataReader from "vtk.js/Sources/IO/Legacy/PolyDataReader";
 import vtkPointPicker from "vtk.js/Sources/Rendering/Core/PointPicker";
 import vtkSphereSource from "vtk.js/Sources/Filters/Sources/SphereSource";
 import { get } from "../../http/api";
-import { deepClone, judgeValidity } from "../../utils/index";
+import { deepClone } from "../../utils/index";
 import { Graph } from "../../utils/graph";
 /**
  * @vtk文件对应关系
@@ -49,43 +49,17 @@ function Home() {
   const sonNodeMap = useRef({}); // 每个节点对应的子节点集合
   const graphRef = useRef(); // 图结构
   const pointsColorMap = useRef([]); // 点集颜色
+
   const lowRef = useRef(null); // 最小值
   const highRef = useRef(null); // 最大值
+  const displayPointsRef = useRef([]); // 暂存当前显示的点集
 
-  // const judgeBoundary = useCallback(
-  //   (a) => {
-  //     if (judgeValidity(highRef.current.value)) {
-  //       // high无效
-  //       if (judgeValidity(lowRef.current.value)) {
-  //         // high无效、low无效
-  //         return true;
-  //       } else {
-  //         // high无效、low有效
-  //         return heightListRef.current[a] > lowRef.current.value;
-  //       }
-  //     } else if (judgeValidity(lowRef.current.value)) {
-  //       // high有效 low无效
-  //       return heightListRef.current[a] < highRef.current.value;
-  //     } else {
-  //       // high有效 low有效
-  //       return (
-  //         heightListRef.current[a] < highRef.current.value &&
-  //         heightListRef.current[a] > lowRef.current.value
-  //       );
-  //     }
-  //   },
-  //   [heightListRef]
-  // );
-  const judgeBoundary = useCallback(
-    (a) => {
-      if (judgeValidity(highRef.current.value)) {
-        // high无效
-        return true;
-      } else {
-        return heightListRef.current[a] < highRef.current.value;
-      }
-    },
-    [heightListRef]
+  /**
+   * 判断节点是否应该显示
+   */
+  const judgeValidity = useCallback(
+    (id) => displayPointsRef.current.includes(id),
+    [displayPointsRef]
   );
   /**
    * click节点 展开/收起子树
@@ -107,14 +81,14 @@ function Home() {
          * 展开子树
          */
         closeList.current = closeList.current.filter((i) => i !== id);
-        // console.log("[展开子树]:", closeList.current);
         const tree = graphRef.current.bfs(id);
         tree.forEach((i) => {
-          if (judgeBoundary(i[0]) && judgeBoundary(i[1]))
+          if (judgeValidity(i[0]) && judgeValidity(i[1])) {
             linesRef.current.push(2, i[0], i[1]);
+          }
         });
         sonNodeMap.current[id].forEach((i) => {
-          if (judgeBoundary(i)) {
+          if (judgeValidity(i)) {
             const sphere = vtkSphereSource.newInstance();
             sphere.setCenter(...polydata.getPoints().getPoint(i));
             sphere.setRadius(0.15);
@@ -134,7 +108,6 @@ function Home() {
          * 隐藏子树
          **/
         closeList.current.push(id);
-        // console.log("[隐藏子树]:", closeList.current);
         // 寻找id节点的子树
         const tree = graphRef.current.bfs(id);
         linesRef.current = linesRef.current.reduce((acc, v, index, arr) => {
@@ -145,8 +118,8 @@ function Home() {
                 (item[0] === arr[index + 1] && item[1] === arr[index + 2]) ||
                 (item[1] === arr[index + 1] && item[0] === arr[index + 2])
             ) &&
-            judgeBoundary(arr[index + 1]) &&
-            judgeBoundary(arr[index + 2])
+            judgeValidity(arr[index + 1]) &&
+            judgeValidity(arr[index + 2])
           ) {
             acc.push(v, arr[index + 1], arr[index + 2]);
           }
@@ -169,15 +142,6 @@ function Home() {
         console.log("sonNodeMap", id, sonNodeMap.current[id]);
         // 删除id的子节点显示
         sonNodeMap.current[id].forEach((v) => {
-          // if (
-          //   !graphRef.current.arc[v].some(
-          //     (item, idx) =>
-          //       sonNodeMap.current[id].indexOf(idx) < 0 && item === 1 // 如果该节点不与sonNodeMap之外的节点有相连
-          //   )
-          // ) {
-          //   renderer.removeActor(pointsActors[v]);
-          //   pointsActors[v].delete();
-          // }
           renderer.removeActor(pointsActors[v]);
           pointsActors[v].delete();
         });
@@ -197,7 +161,7 @@ function Home() {
       context.current.actor = newActor;
       context.current.mapper = newMapper;
     },
-    [judgeBoundary]
+    [judgeValidity]
   );
 
   /**
@@ -227,6 +191,9 @@ function Home() {
         linesCopyRef.current = polydata.getLines().getData();
         const res = await get("/getJson");
         heightListRef.current = res.data;
+        displayPointsRef.current = heightListRef.current.map(
+          (a, index) => index
+        );
 
         graphRef.current = generateGraph(
           linesCopyRef.current.reduce((acc, v, index) => {
@@ -352,6 +319,7 @@ function Home() {
       pointsActors,
     } = context.current;
     polydata.getLines().setData(linesCopyRef.current);
+    displayPointsRef.current = heightListRef.current.map((v, i) => i);
     for (let i = 0; i < polydata.getNumberOfPoints(); i++) {
       const sphere = vtkSphereSource.newInstance();
       sphere.setCenter(...polydata.getPoints().getPoint(i));
@@ -390,15 +358,19 @@ function Home() {
       pointsActors,
     } = context.current;
     closeList.current = [];
+
+    // 寻找范围内的节点
     const targetPointsList = heightListRef.current.reduce((acc, v, index) => {
       if (v > lowRef.current.value && v < highRef.current.value)
         acc.push(index);
       return acc;
     }, []);
-    const tempPointsList = heightListRef.current.reduce((acc, v, index) => {
-      if (v < highRef.current.value) acc.push(index);
-      return acc;
-    }, []);
+
+    // 寻找包含根路径的所有节点
+    const tempPointsList = graphRef.current.getCommonRootPath(
+      deepClone(targetPointsList)
+    );
+    displayPointsRef.current = tempPointsList;
 
     linesRef.current = linesCopyRef.current.reduce((acc, v, index, arr) => {
       if (index % 3 === 0) {
@@ -470,7 +442,6 @@ function Home() {
               <input type="number" step={0.1} ref={highRef} />
               <button onClick={onSearchClick}>search</button>
               <button
-                // onClick={() => window.location.reload()}
                 onClick={onReset}
                 style={{ marginLeft: 12 }}
               >
