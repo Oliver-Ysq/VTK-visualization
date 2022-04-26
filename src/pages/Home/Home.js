@@ -1,4 +1,8 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+/**
+ * @vtk文件对应关系
+ * POINT_ID 从0开始，对应POINT_DATA 的第一个点
+ */
+import { useRef, useEffect, useCallback } from "react";
 import "@kitware/vtk.js/Rendering/Profiles/Geometry";
 import "vtk.js/Sources/Rendering/Profiles/Geometry";
 import vtkActor from "@kitware/vtk.js/Rendering/Core/Actor";
@@ -10,14 +14,20 @@ import vtkSphereSource from "vtk.js/Sources/Filters/Sources/SphereSource";
 import { get } from "../../http/api";
 import { deepClone } from "../../utils/index";
 import { Graph } from "../../utils/graph";
+
 /**
- * @vtk文件对应关系
- * POINT_ID 从0开始，对应POINT_DATA 的第一个点
+ * 颜色对照
  */
 const colorMap = {
   0: [1, 1, 0], // 普通颜色
   1: [1, 0, 0], // 选中"点"的颜色
 };
+/**
+ * 生成图数据结构
+ * @param {*} linesList
+ * @param {*} heightList
+ * @returns
+ */
 const generateGraph = (linesList, heightList) => {
   let pointsNumber = heightList.length;
   let edgesNumber = linesList.length;
@@ -59,22 +69,15 @@ function Home() {
    */
   const judgeValidity = useCallback(
     (id) => displayPointsRef.current.includes(id),
-    [displayPointsRef.current]
+    []
   );
+
   /**
    * click节点 展开/收起子树
    */
   const collapseLines = useCallback(
     (id) => {
-      const {
-        polydata,
-        actor,
-        mapper,
-        renderer,
-        renderWindow,
-        picker,
-        pointsActors,
-      } = context.current;
+      const { polydata, renderer, pointsActors } = context.current;
 
       if (closeList.current.indexOf(id) >= 0) {
         /**
@@ -147,21 +150,29 @@ function Home() {
         polydata.getLines().setData(linesRef.current);
       }
 
-      actor.delete();
-      mapper.delete();
-
-      const newMapper = vtkMapper.newInstance();
-      const newActor = vtkActor.newInstance();
-      picker.setPickList([newActor]);
-      newMapper.setInputData(polydata);
-      newActor.setMapper(newMapper);
-      renderer.addActor(newActor);
-      renderWindow.render();
-      context.current.actor = newActor;
-      context.current.mapper = newMapper;
+      generateNewDisplayComponent();
     },
     [judgeValidity]
   );
+
+  /**
+   * 生成新的画布组件
+   */
+  const generateNewDisplayComponent = () => {
+    const { polydata, actor, mapper, renderer, renderWindow, picker } =
+      context.current;
+    actor.delete();
+    mapper.delete();
+    const newMapper = vtkMapper.newInstance();
+    const newActor = vtkActor.newInstance();
+    picker.setPickList([newActor]);
+    newMapper.setInputData(polydata);
+    newActor.setMapper(newMapper);
+    renderer.addActor(newActor);
+    renderWindow.render();
+    context.current.actor = newActor;
+    context.current.mapper = newMapper;
+  };
 
   /**
    * 初始化窗口
@@ -181,15 +192,19 @@ function Home() {
       const reader = vtkPolyDataReader.newInstance();
 
       (async function () {
-        await reader.setUrl(`http://127.0.0.1:7001/public/vtk/st.vtk`);
+        await reader.setUrl(`http://127.0.0.1:7001/public/vtk/model.vtk`);
         polydata = reader.getOutputData(0);
-        global.polydata = polydata;
+        const {
+          data: { scalars, points, lines },
+        } = await get("/getData?type=0"); // 通过http接口获取scalars,points,lines数据
+        polydata.getLines().setData(lines); // 设定lines数据
+        polydata.getPoints().setData(points); // 设定points数据
+        global.polydata = polydata; // 将polydata挂在在全局
 
         // 处理数据
         linesRef.current = polydata.getLines().getData();
         linesCopyRef.current = polydata.getLines().getData();
-        const res = await get("/getJson");
-        heightListRef.current = res.data;
+        heightListRef.current = scalars;
         displayPointsRef.current = heightListRef.current.map(
           (a, index) => index
         );
@@ -258,12 +273,14 @@ function Home() {
             console.log("[Picked point id]: ", pickedPointId);
             collapseLines(pickedPointId);
             // 根据id定位该顶点
-            const pickedPoint = polydata.getPoints().getPoint(pickedPointId);
+            // const pickedPoint = polydata.getPoints().getPoint(pickedPointId);
             // console.log("coordinate:", pickedPoint);
             console.log("高度：", heightListRef.current[pickedPointId]);
           }
           renderWindow.render();
         });
+
+        // 在全局挂载高亮函数，根据id查找指定point
 
         global.highlight = (id) => {
           const sphere = vtkSphereSource.newInstance();
@@ -277,6 +294,7 @@ function Home() {
           renderer.addActor(pointsActors[id]);
           renderWindow.render();
         };
+
         context.current = {
           fullScreenRenderer,
           renderWindow,
@@ -304,20 +322,15 @@ function Home() {
     };
   }, [vtkContainerRef, collapseLines]);
 
-  const onReset = (e) => {
+  /**
+   * 重置筛选条件
+   */
+  const onReset = () => {
     lowRef.current.value = null;
     highRef.current.value = null;
     closeList.current = [];
     sonNodeMap.current = [];
-    const {
-      polydata,
-      actor,
-      mapper,
-      renderer,
-      renderWindow,
-      picker,
-      pointsActors,
-    } = context.current;
+    const { polydata, renderer, pointsActors } = context.current;
     polydata.getLines().setData(linesCopyRef.current);
     displayPointsRef.current = heightListRef.current.map((v, i) => i);
     for (let i = 0; i < polydata.getNumberOfPoints(); i++) {
@@ -336,29 +349,14 @@ function Home() {
     }
     linesRef.current = deepClone(linesCopyRef.current);
 
-    actor.delete();
-    mapper.delete();
-
-    const newMapper = vtkMapper.newInstance();
-    const newActor = vtkActor.newInstance();
-    picker.setPickList([newActor]);
-    newMapper.setInputData(polydata);
-    newActor.setMapper(newMapper);
-    renderer.addActor(newActor);
-    renderWindow.render();
-    context.current.actor = newActor;
-    context.current.mapper = newMapper;
+    generateNewDisplayComponent();
   };
-  const onSearchClick = (e) => {
-    const {
-      polydata,
-      actor,
-      mapper,
-      renderer,
-      renderWindow,
-      picker,
-      pointsActors,
-    } = context.current;
+
+  /**
+   * 范围查找
+   */
+  const onSearchClick = () => {
+    const { polydata, renderer, pointsActors } = context.current;
     closeList.current = [];
 
     // 寻找范围内的节点
@@ -410,18 +408,7 @@ function Home() {
         renderer.addActor(pointsActors[i]);
       }
     }
-    actor.delete();
-    mapper.delete();
-
-    const newMapper = vtkMapper.newInstance();
-    const newActor = vtkActor.newInstance();
-    picker.setPickList([newActor]);
-    newMapper.setInputData(polydata);
-    newActor.setMapper(newMapper);
-    renderer.addActor(newActor);
-    renderWindow.render();
-    context.current.actor = newActor;
-    context.current.mapper = newMapper;
+    generateNewDisplayComponent();
   };
 
   return (
