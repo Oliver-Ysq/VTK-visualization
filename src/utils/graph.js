@@ -10,7 +10,7 @@ export class Graph {
   EDGES_NUMBER = 0; // 边数
 
   visited = [];
-  rootId = -1;  // 根节点的id
+  rootId = -1; // 根节点的id
 
   constructor(points, arc, pointsNumber, edgesNumber) {
     this.POINTS_NUMBER = pointsNumber;
@@ -70,8 +70,8 @@ export class Graph {
 
   /**
    * 获取pointsList中所有节点的根路径并合并去重
-   * @param {*} pointsList 
-   * @returns 
+   * @param {*} pointsList
+   * @returns
    */
   getCommonRootPath(pointsList) {
     // 对于每个节点val，寻找其根路径，并合并
@@ -89,8 +89,8 @@ export class Graph {
 
   /**
    * 根据id单向遍历整个图结构
-   * @param {*} id 
-   * @returns 
+   * @param {*} id
+   * @returns
    */
   bfs(id) {
     let queue = []; //初始化队列

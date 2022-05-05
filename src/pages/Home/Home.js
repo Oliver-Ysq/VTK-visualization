@@ -2,7 +2,7 @@
  * @vtk文件对应关系
  * POINT_ID 从0开始，对应POINT_DATA 的第一个点
  */
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import "@kitware/vtk.js/Rendering/Profiles/Geometry";
 import "vtk.js/Sources/Rendering/Profiles/Geometry";
 import vtkActor from "@kitware/vtk.js/Rendering/Core/Actor";
@@ -14,6 +14,9 @@ import vtkSphereSource from "vtk.js/Sources/Filters/Sources/SphereSource";
 import { get } from "../../http/api";
 import { deepClone } from "../../utils/index";
 import { Graph } from "../../utils/graph";
+import { InputNumber, Button } from "antd";
+import { SearchOutlined } from "@ant-design/icons";
+import "./style.css";
 
 /**
  * 颜色对照
@@ -60,8 +63,10 @@ function Home() {
   const graphRef = useRef(); // 图结构
   const pointsColorMap = useRef([]); // 点集颜色
 
-  const lowRef = useRef(null); // 最小值
-  const highRef = useRef(null); // 最大值
+  // const lowRef = useRef(null); // 最小值
+  // const highRef = useRef(null); // 最大值
+  const [low, setLow] = useState(0);
+  const [high, setHigh] = useState(0);
   const displayPointsRef = useRef([]); // 暂存当前显示的点集
 
   /**
@@ -181,6 +186,10 @@ function Home() {
     if (!context.current) {
       const fullScreenRenderer = vtkFullScreenRenderWindow.newInstance({
         background: [0, 0, 0],
+        containerStyle: {
+          width: "80vw",
+          height: "100vh",
+        },
         rootContainer: vtkContainerRef.current,
       });
       const renderer = fullScreenRenderer.getRenderer();
@@ -326,8 +335,8 @@ function Home() {
    * 重置筛选条件
    */
   const onReset = () => {
-    lowRef.current.value = null;
-    highRef.current.value = null;
+    setLow(0);
+    setHigh(0);
     closeList.current = [];
     sonNodeMap.current = [];
     const { polydata, renderer, pointsActors } = context.current;
@@ -361,8 +370,7 @@ function Home() {
 
     // 寻找范围内的节点
     const targetPointsList = heightListRef.current.reduce((acc, v, index) => {
-      if (v > lowRef.current.value && v < highRef.current.value)
-        acc.push(index);
+      if (v > low && v < high) acc.push(index);
       return acc;
     }, []);
 
@@ -410,32 +418,56 @@ function Home() {
     }
     generateNewDisplayComponent();
   };
+  const onSetLow = (e) => setLow(parseFloat(e));
+  const onSetHigh = (e) => setHigh(parseFloat(e));
+  const onLowBlur = () => {
+    if (low === undefined) setLow(0);
+  };
+  const onHighBlur = () => {
+    if (high === undefined) setHigh(0);
+  };
 
   return (
-    <div>
+    <div style={{ border: "red" }}>
       <div ref={vtkContainerRef} />
-      <table
-        style={{
-          position: "absolute",
-          top: "25px",
-          left: "25px",
-          background: "white",
-          padding: "12px",
-        }}
-      >
-        <tbody>
-          <tr>
-            <td>
-              <input type="number" step={0.1} ref={lowRef} />
-              <input type="number" step={0.1} ref={highRef} />
-              <button onClick={onSearchClick}>search</button>
-              <button onClick={onReset} style={{ marginLeft: 12 }}>
-                Reset
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div className="white-board">
+        <div className="search-wrapper">
+          <div className="flex">
+            起：
+            <InputNumber
+              step={0.1}
+              value={low}
+              onChange={onSetLow}
+              onClick={() => setLow(undefined)}
+              onBlur={onLowBlur}
+              className="flex-grow1 margin-sm"
+            ></InputNumber>
+          </div>
+          <div className="flex">
+            止：
+            <InputNumber
+              step={0.1}
+              value={high}
+              onChange={onSetHigh}
+              onClick={() => setHigh(undefined)}
+              onBlur={onHighBlur}
+              className="flex-grow1 margin-sm"
+            ></InputNumber>
+          </div>
+          <div className="flex search-buttons">
+            <Button onClick={onReset}>Reset</Button>
+            <Button
+              onClick={onSearchClick}
+              type="primary"
+              icon={<SearchOutlined />}
+              className="search-button margin-sm"
+            >
+              search
+            </Button>
+          </div>
+        </div>
+        <div className="flex margin-sm">其他功能待开发...</div>
+      </div>
     </div>
   );
 }

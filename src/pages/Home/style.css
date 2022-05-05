@@ -1,0 +1,32 @@
+.white-board {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: "white";
+  padding: 12px;
+  height: 100vh;
+  width: 20%;
+  display: flex;
+  flex-direction: column;
+}
+.search-wrapper {
+  margin-top: 8vh;
+}
+.flex {
+  display: flex;
+  align-items: center;
+}
+.flex-grow1 {
+  flex-grow: 1;
+}
+.margin-sm {
+  margin: 6px;
+}
+
+.search-buttons {
+  width: 100%;
+  justify-content: flex-end;
+}
+.search-button {
+  margin-left: 8px;
+}
